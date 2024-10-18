@@ -1,0 +1,7 @@
+.idea/
+config.py
+/venv/
+/reports/
+/cookies/
+/chrome_profile/
+*.rar

@@ -1,0 +1,8 @@
+selenium~=4.25.0
+SQLAlchemy~=2.0.35
+pyodbc~=5.1.0
+pandas~=2.2.3
+PyAutoGUI~=0.9.54
+psycopg2~=2.9.9
+openpyxl~=3.1.5
+schedule~=1.2.2
