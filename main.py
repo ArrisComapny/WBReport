@@ -76,7 +76,7 @@ class WebDriver:
 
         self.chrome_options = uc.ChromeOptions()
 
-        # self.chrome_options.add_argument("--headless")
+        self.chrome_options.add_argument("--headless")
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-gpu")
         self.chrome_options.add_argument("--use-gl=swiftshader")
@@ -434,7 +434,6 @@ class WebDriver:
 
 def main():
     web = WebDriver()
-    time.sleep(10000)
     list_stores = None
     while list_stores is None:
         list_stores = web.start()
@@ -459,4 +458,4 @@ def run_job():
 
 
 if __name__ == '__main__':
-    main()
+    run_job()
