@@ -1,23 +1,23 @@
 import os
 import time
-import json
 import shutil
 import logging
 import zipfile
+import random
 import schedule
-import pyautogui
 import pandas as pd
+import undetected_chromedriver as uc
 
 from functools import wraps
 from contextlib import suppress
 from datetime import datetime, timedelta, date
 
-from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, UnexpectedAlertPresentException, NoAlertPresentException, \
+    ElementClickInterceptedException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions
 
@@ -25,9 +25,12 @@ from database.db import DbConnection
 from database.data_classes import DataWBReportDaily
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
+logging.getLogger("seleniumwire").setLevel(logging.CRITICAL)
+logging.getLogger("selenium").setLevel(logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
 TIME_AWAITED = 20
+TIME_SLEEP = (5, 10)
 
 
 def handle_exceptions(func):
@@ -36,7 +39,27 @@ def handle_exceptions(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            print(f"Ошибка при выполнении функции '{func.__name__}': {e}")
+            logger.error(f"Ошибка при выполнении функции '{func.__name__}': {e}")
+    return wrapper
+
+
+def modal_exceptions(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except ElementClickInterceptedException:
+            logger.warning("Обнаружено модальное окно, закрываю его.")
+            try:
+                cancel_button = WebDriverWait(self.driver, TIME_AWAITED).until(
+                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, 'button.zYbWaxtcLWbZ0k3fKPTi.llfYEylHL4V2OpZmoDqx'))
+                )
+
+                cancel_button.click()
+                time.sleep(random.randint(*TIME_SLEEP))
+            except TimeoutException:
+                logger.error("Не удалось найти кнопку для закрытия модального окна.")
+            return func(self, *args, **kwargs)
     return wrapper
 
 
@@ -47,32 +70,33 @@ class WebDriver:
         if self.need_date is None:
             self.need_date = date.today() - timedelta(days=1)
 
-        window_size = 800
-        self.cookies_path = os.path.join(os.getcwd(), "cookies")
         self.profile_path = os.path.join(os.getcwd(), "chrome_profile")
         self.reports_path = os.path.join(os.getcwd(), "reports", self.need_date.isoformat())
         self.new_path = self.reports_path
 
-        screen_width, screen_height = pyautogui.size()
-        x_position = (screen_width - window_size) // 2
-        y_position = (screen_height - window_size) // 2
+        self.chrome_options = uc.ChromeOptions()
 
-        self.chrome_options = Options()
-        self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
-        self.chrome_options.add_argument("--app=https://seller-auth.wildberries.ru")
-        self.chrome_options.add_argument(f"--window-size={window_size},{window_size}")
-        self.chrome_options.add_argument(f"--window-position={x_position},{y_position}")
-        self.chrome_options.add_argument("--disable-infobars")
-        self.chrome_options.add_argument("--disable-extensions")
-
-        self.chrome_options.add_argument("--headless")
+        # self.chrome_options.add_argument("--headless")
+        self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-gpu")
-
-        if proxy:
-            self.chrome_options.add_argument(f'--proxy-server={proxy}')
-
+        self.chrome_options.add_argument("--use-gl=swiftshader")
+        self.chrome_options.add_argument("--disable-extensions")
+        self.chrome_options.add_argument("--disable-automation")
+        self.chrome_options.add_argument("--disable-dev-shm-usage")
+        self.chrome_options.add_argument("--allow-insecure-localhost")
+        self.chrome_options.add_argument("--ignore-certificate-errors")
+        self.chrome_options.add_argument("--enable-unsafe-swiftshader")
+        self.chrome_options.add_argument("--disable-software-rasterizer")
+        self.chrome_options.add_argument("--disable-usb-keyboard-detect")
+        self.chrome_options.add_argument("--disable-features=PageLoadMetrics")
+        self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
+        self.chrome_options.add_experimental_option("useAutomationExtension", False)
+        self.chrome_options.add_argument("--app=https://seller-auth.wildberries.ru")
+        self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        self.chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        self.chrome_options.add_experimental_option('useAutomationExtension', False)
+        self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                         "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
 
         self.service = Service(ChromeDriverManager().install())
 
@@ -86,7 +110,9 @@ class WebDriver:
         if self.driver:
             text = "Перезапускаю"
             self.driver.quit()
-        self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+        self.driver = webdriver.Chrome(service=self.service,
+                                       options=self.chrome_options)
+        self.driver.maximize_window()
         logger.info(f"{text} webdriver")
 
     @handle_exceptions
@@ -94,11 +120,25 @@ class WebDriver:
         """Ожидает входа в кабинет, после сохраняет cookies по каждому магазину."""
         logger.info(f"Ожидаю входа в кабинет. Пожалуйста, войдите в ЛК.")
 
+        time.sleep(10)
+
+        start_time = time.time()
         while True:
-            if self.driver.current_url == 'https://seller.wildberries.ru/':
-                break
+            try:
+                if self.driver.current_url == 'https://seller.wildberries.ru/':
+                    logger.info("Вход осуществлён.")
+                    break
+            except UnexpectedAlertPresentException:
+                with suppress(NoAlertPresentException):
+                    alert = self.driver.switch_to.alert
+                    alert.accept()
+
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 120:
+                logger.error("Не удалось войти в систему в течение 120 секунд.")
+                raise TimeoutError("Время ожидания входа истекло.")
+
             time.sleep(1)
-            continue
         with suppress(TimeoutException):
             accept_button = WebDriverWait(self.driver, TIME_AWAITED).until(
                 expected_conditions.presence_of_element_located((By.CSS_SELECTOR,
@@ -106,35 +146,36 @@ class WebDriver:
             )
             logger.info(f"Разрешил cookies.")
             accept_button.click()
+            time.sleep(random.randint(*TIME_SLEEP))
 
         if self.click_profile():
-            logger.info(f"Сбор cookies по магазинам.")
             stores = self.find_stores()
-            for i, store in [(i, store) for i, store in enumerate(stores) if store not in self.check_cookies()]:
-                if self.go_store(i, store):
-                    self.save_cookies(store)
             return stores
 
     @handle_exceptions
+    @modal_exceptions
     def click_profile(self) -> bool:
         """Клик по профилю."""
-        try:
-            WebDriverWait(self.driver, TIME_AWAITED).until(
-                expected_conditions.presence_of_element_located((By.CSS_SELECTOR,
-                                                                 '.suppliers-item_SuppliersItem__text__sLbvh'))
-            )
-        except TimeoutException:
+        while True:
             try:
-                element = WebDriverWait(self.driver, TIME_AWAITED).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.ProfileView'))
+                WebDriverWait(self.driver, TIME_AWAITED).until(
+                    expected_conditions.presence_of_element_located((By.CSS_SELECTOR,
+                                                                     '.suppliers-item_SuppliersItem__text__sLbvh'))
                 )
-                element.click()
+                return True
             except TimeoutException:
-                logger.error(f"Не удалось найти элемент '.ProfileView' для клика.")
-                return False
-        return True
+                try:
+                    element = WebDriverWait(self.driver, TIME_AWAITED).until(
+                        expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.ProfileView'))
+                    )
+                    element.click()
+                    time.sleep(random.randint(*TIME_SLEEP))
+                except TimeoutException:
+                    logger.error(f"Не удалось найти элемент '.ProfileView' для клика.")
+                    return False
 
     @handle_exceptions
+    @modal_exceptions
     def find_stores(self) -> list:
         """Сбор ID магазинов в профиле."""
         try:
@@ -150,6 +191,7 @@ class WebDriver:
             return []
 
     @handle_exceptions
+    @modal_exceptions
     def go_store(self, i: int, store: str) -> bool:
         """Переход в ЛК магазина по позиции в списке профиля."""
         logger.info(f"Переход в ЛК магазина ID: {store}.")
@@ -160,13 +202,17 @@ class WebDriver:
                                                                           '.checkbox_Checkbox--radio__oqtnx'))
                 )
                 elements[i].click()
+                time.sleep(random.randint(*TIME_SLEEP))
                 return True
             except TimeoutException:
                 logger.error("Элементы выбора магазина не загрузились.")
 
     @handle_exceptions
+    @modal_exceptions
     def download_report_daily(self, report: str) -> None:
         """Скачивание ежедневного отчёта."""
+        download_folder = os.path.expanduser("~/Downloads")
+
         download_wait_time = 60
         retry = 0
         max_retry = 6
@@ -180,6 +226,7 @@ class WebDriver:
                                                                  '.Menu-block-item__button__VDTa2I8Ag7'))
                 )
                 confirm_button.click()
+                time.sleep(random.randint(*TIME_SLEEP))
             except TimeoutException:
                 with suppress(TimeoutException):
                     download_button = WebDriverWait(self.driver, TIME_AWAITED).until(
@@ -187,6 +234,7 @@ class WebDriver:
                                                                      '.DownloadButtons__download-button__9EZ4rCwH8c'))
                     )
                     download_button.click()
+                    time.sleep(random.randint(*TIME_SLEEP))
                 retry += 1
                 continue
             else:
@@ -194,9 +242,15 @@ class WebDriver:
                 start_time = time.time()
 
                 while True:
-                    if any([filename.endswith(".crdownload") for filename in os.listdir(self.new_path)]):
-                        continue
-                    elif any([filename.endswith(f"{report}.zip") for filename in os.listdir(self.new_path)]):
+                    downloaded_files = [f for f in os.listdir(download_folder) if
+                                        f.endswith(".zip") and report in f and not f.endswith(".crdownload")]
+
+                    if downloaded_files:
+                        for file_name in downloaded_files:
+                            source_path = os.path.join(download_folder, file_name)
+                            destination_path = os.path.join(self.new_path, file_name)
+
+                            shutil.move(source_path, destination_path)
                         logger.info(f"Загрузка файла {self.new_path}\\{report} завершена.")
                         return
                     elif time.time() - start_time > download_wait_time:
@@ -208,38 +262,6 @@ class WebDriver:
         logger.error(f"Загрузка файла {self.new_path}\\{report} не удалась.")
 
     @handle_exceptions
-    def save_cookies(self, name: str) -> None:
-        """Сохранение cookie."""
-        logger.info(f"Новые cookies по ID {name}.")
-        if not os.path.exists(self.cookies_path):
-            os.makedirs(self.cookies_path)
-
-        cookies = self.driver.get_cookies()
-
-        with open(f'{self.cookies_path}/{name}.json', 'w', encoding='utf-8') as file:
-            json.dump(cookies, file, ensure_ascii=False, indent=4)
-
-    @handle_exceptions
-    def check_cookies(self) -> list:
-        """Проверка cookies файлов, возвращает список названия файлов."""
-        json_files = []
-        if os.path.exists(self.cookies_path):
-            json_files = [file.split('.')[0] for file in os.listdir(self.cookies_path) if file.endswith('.json')]
-        return json_files
-
-    @handle_exceptions
-    def load_cookies(self, name: str) -> bool:
-        """Загрузка cookie по названию. В случае успеха возвращает True."""
-        cookies_file = os.path.join(self.cookies_path, f"{name}.json")
-
-        if os.path.exists(cookies_file):
-            with open(cookies_file, 'r', encoding='utf-8') as file:
-                cookies = json.load(file)
-                for cookie in cookies:
-                    self.driver.add_cookie(cookie)
-            return True
-
-    @handle_exceptions
     def change_path_downloads(self, store: str) -> None:
         """Устанавливанет место скачивания файла."""
         self.new_path = f'{self.reports_path}\\{store}'
@@ -247,29 +269,23 @@ class WebDriver:
         if not os.path.exists(self.new_path):
             os.makedirs(self.new_path)
 
-        self.chrome_options.add_experimental_option('prefs', {
-            'download.default_directory': self.new_path,
-            'download.prompt_for_download': False,
-            'download.directory_upgrade': True,
-            'safebrowsing.enabled': True
-        })
-
-        self.create_driver()
-
     @handle_exceptions
+    @modal_exceptions
     def stores_report_daily(self, stores: list) -> None:
         """Собирает список отчётов за вчерашний день для каждого магазина, после чего скачивает."""
         if os.path.exists(self.reports_path):
             shutil.rmtree(self.reports_path)
         os.makedirs(self.reports_path)
 
-        for store in stores:
+        for i, store in enumerate(stores):
             logger.info(f"Сбор доступных отчётов по ID {store}.")
             ids = []
-            if self.load_cookies(f'{store}'):
-                self.driver.refresh()
+
+            if self.go_store(i, store):
+
                 self.driver.get(
                     'https://seller.wildberries.ru/suppliers-mutual-settlements/reports-implementations/reports-daily')
+                time.sleep(random.randint(*TIME_SLEEP))
 
                 if (date.today() - self.need_date).days > 7:
                     with suppress(TimeoutException):
@@ -277,6 +293,7 @@ class WebDriver:
                             expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.button__WxukyZSSBr'))
                         )
                         button_more.click()
+                        time.sleep(random.randint(*TIME_SLEEP))
                 try:
                     elements = WebDriverWait(self.driver, TIME_AWAITED).until(
                                 expected_conditions.presence_of_all_elements_located((By.CSS_SELECTOR,
@@ -305,6 +322,7 @@ class WebDriver:
                 self.driver.get(
                     f'https://seller.wildberries.ru/suppliers-mutual-settlements/reports-implementations/'
                     f'reports-daily/report/{report}?isGlobalBalance=false')
+                time.sleep(random.randint(*TIME_SLEEP))
                 self.download_report_daily(report)
 
     @handle_exceptions
@@ -416,6 +434,7 @@ class WebDriver:
 
 def main():
     web = WebDriver()
+    time.sleep(10000)
     list_stores = None
     while list_stores is None:
         list_stores = web.start()
@@ -440,4 +459,4 @@ def run_job():
 
 
 if __name__ == '__main__':
-    run_job()
+    main()
