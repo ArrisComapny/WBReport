@@ -1,0 +1,14 @@
+selenium~=4.25.0
+webdriver-manager~=4.0.2
+SQLAlchemy~=2.0.35
+psycopg2~=2.9.10
+pyodbc~=5.2.0
+selenium-wire~=5.1.0
+undetected-chromedriver~=3.5.5
+requests~=2.32.3
+setuptools~=65.5.1
+pandas~=2.2.3
+django-scheduler~=0.10.1
+openpyxl~=3.1.5
+blinker==1.7.0
+schedule~=1.2.2

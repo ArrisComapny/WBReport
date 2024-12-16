@@ -1,0 +1,8 @@
+.idea/
+config.py
+/venv/
+/log/
+/reports/
+/chrome_profile/
+__pycache__/
+*.pyc

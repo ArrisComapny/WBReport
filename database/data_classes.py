@@ -1,0 +1,65 @@
+import datetime
+
+from dataclasses import dataclass
+
+
+@dataclass
+class DataWBReportDaily:
+    realizationreport_id: str
+    gi_id: str
+    subject_name: str
+    sku: str
+    brand: str
+    vendor_code: str
+    size: str
+    barcode: str
+    doc_type_name: str
+    quantity: int
+    retail_price: float
+    retail_amount: float
+    sale_percent: int
+    commission_percent: float
+    office_name: str
+    supplier_oper_name: str
+    order_date: datetime.date
+    sale_date: datetime.date
+    operation_date: datetime.date
+    shk_id: str
+    retail_price_withdisc_rub: float
+    delivery_amount: int
+    return_amount: int
+    delivery_rub: float
+    gi_box_type_name: str
+    product_discount_for_report: float
+    supplier_promo: float
+    order_id: str
+    ppvz_spp_prc: float
+    ppvz_kvw_prc_base: float
+    ppvz_kvw_prc: float
+    sup_rating_prc_up: float
+    is_kgvp_v2: float
+    ppvz_sales_commission: float
+    ppvz_for_pay: float
+    ppvz_reward: float
+    acquiring_fee: float
+    acquiring_bank: str
+    ppvz_vw: float
+    ppvz_vw_nds: float
+    ppvz_office_id: str
+    ppvz_office_name: str
+    ppvz_supplier_id: str
+    ppvz_supplier_name: str
+    ppvz_inn: str
+    declaration_number: str
+    bonus_type_name: str
+    sticker_id: str
+    site_country: str
+    penalty: float
+    additional_payment: float
+    rebill_logistic_cost: float
+    rebill_logistic_org: str
+    kiz: str
+    storage_fee: float
+    deduction: float
+    acceptance: float
+    posting_number: str
