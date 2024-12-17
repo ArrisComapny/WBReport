@@ -23,7 +23,7 @@ class Market(Base):
     __table_args__ = (
         UniqueConstraint('marketplace', 'name_company', 'phone', name='markets_unique'),
         UniqueConstraint('marketplace', 'name_company', name='market_unique'),
-        UniqueConstraint('client_id', name='client_idt_unique')
+        UniqueConstraint('client_id', name='client_id_unique')
     )
 
 
