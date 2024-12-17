@@ -39,7 +39,7 @@ class RemoteLogger:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
 
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
 
         formatter = MoscowFormatter('%(asctime)s - %(levelname)s - %(message)s')

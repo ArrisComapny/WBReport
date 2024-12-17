@@ -150,12 +150,6 @@ class DbConnection:
             raise Exception("Нет запроса")
 
     @retry_on_exception()
-    def get_client_id(self, entrepreneur: str) -> str:
-        client = self.session.query(Client).filter_by(marketplace='WB', entrepreneur=entrepreneur).first()
-        if client:
-            return client.client_id
-
-    @retry_on_exception()
     def add_wb_report_daily_entry(self, client_id: str, list_report: list[DataWBReportDaily], date: datetime.date,
                                   realizationreport_id: str) -> None:
         self.session.query(WBReportDaily).filter_by(

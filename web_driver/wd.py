@@ -26,6 +26,8 @@ from database.models import Market
 from database.db import DbConnection
 from log_api import logger, get_moscow_time
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 TIME_AWAITED = 5
 TIME_SLEEP = (5, 10)
 
@@ -69,11 +71,11 @@ class WebDriver:
         self.user = user
         self.market = market
         self.new_path = None
+        self.client_id = market.client_id
         self.db_conn_admin = db_conn_admin
         self.db_conn_arris = db_conn_arris
         self.proxy = market.connect_info.proxy
         self.phone = market.connect_info.phone
-        self.client_id = db_conn_arris.get_client_id(entrepreneur=market.entrepreneur)
         self.browser_id = f"{market.connect_info.phone}_WB"
 
         self.marketplace = self.db_conn_admin.get_marketplace()
@@ -93,14 +95,21 @@ class WebDriver:
 
         self.chrome_options = uc.ChromeOptions()
 
+        self.chrome_options.add_argument("--silent")
         self.chrome_options.add_argument("--headless")
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-gpu")
+        self.chrome_options.add_argument("--log-level=3")
+        self.chrome_options.add_argument("--disable-webgl")
+        self.chrome_options.add_argument("--use-gl=swiftshader")
         self.chrome_options.add_argument("--disable-extensions")
         self.chrome_options.add_argument("--disable-automation")
+        self.chrome_options.add_argument("--enable-unsafe-webgl")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument("--allow-insecure-localhost")
         self.chrome_options.add_argument("--ignore-certificate-errors")
+        self.chrome_options.add_argument("--disable-accelerated-2d-canvas")
+        self.chrome_options.add_argument("--disable-accelerated-video-decode")
         self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
         self.chrome_options.add_experimental_option("useAutomationExtension", False)
         self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
