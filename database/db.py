@@ -164,7 +164,8 @@ class DbConnection:
             match_found = any(
                 row.supplier_oper_name == existing_type[0] and (
                         (existing_type[1] is None and row.bonus_type_name is None) or
-                        (existing_type[1] is not None and row.bonus_type_name.startswith(existing_type[1]))
+                        (existing_type[1] is not None and row.bonus_type_name is not None
+                         and row.bonus_type_name.startswith(existing_type[1]))
                 )
                 for existing_type in type_services
             )
