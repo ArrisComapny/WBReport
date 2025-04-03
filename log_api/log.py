@@ -1,13 +1,16 @@
 import os
 import logging
 import requests
+import urllib3
 
 from datetime import datetime, timezone, timedelta
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def get_moscow_time():
     try:
-        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow")
+        response = requests.get(url="http://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow", verify=False)
         response.raise_for_status()
         data = response.json()
         moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])

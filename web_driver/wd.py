@@ -1,7 +1,7 @@
 import os
-import shutil
 import time
 import random
+import shutil
 import zipfile
 import datetime
 
@@ -21,15 +21,17 @@ from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException, ElementClickInterceptedException
 
-from database.data_classes import DataWBReportDaily
 from database.models import Market
 from database.db import DbConnection
 from log_api import logger, get_moscow_time
+from database.data_classes import DataWBReportDaily
+from .create_extension_proxy import create_proxy_auth_extension
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-TIME_AWAITED = 5
-TIME_SLEEP = (5, 10)
+
+TIME_AWAITED = 25
+TIME_SLEEP = (10, 15)
 
 
 def handle_exceptions(func):
@@ -77,7 +79,6 @@ class WebDriver:
         self.proxy = market.connect_info.proxy
         self.phone = market.connect_info.phone
         self.browser_id = f"{market.connect_info.phone}_WB"
-
         self.marketplace = self.db_conn_admin.get_marketplace()
 
         self.profile_path = os.path.join(os.getcwd(), "chrome_profile", self.browser_id)
@@ -85,31 +86,16 @@ class WebDriver:
         os.makedirs(self.profile_path, exist_ok=True)
         os.makedirs(self.reports_path, exist_ok=True)
 
-        self.proxy_options = {
-            'proxy': {
-                'http': f'{self.proxy}',
-                'https': f'{self.proxy.replace("http", "https")}',
-                'no_proxy': 'localhost,127.0.0.1'
-            }
-        }
-
         self.chrome_options = uc.ChromeOptions()
-
-        self.chrome_options.add_argument("--silent")
+        self.chrome_options.add_argument("--lang=ru")
         self.chrome_options.add_argument("--headless")
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-gpu")
         self.chrome_options.add_argument("--log-level=3")
-        self.chrome_options.add_argument("--disable-webgl")
-        self.chrome_options.add_argument("--use-gl=swiftshader")
-        self.chrome_options.add_argument("--disable-extensions")
         self.chrome_options.add_argument("--disable-automation")
-        self.chrome_options.add_argument("--enable-unsafe-webgl")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument("--allow-insecure-localhost")
         self.chrome_options.add_argument("--ignore-certificate-errors")
-        self.chrome_options.add_argument("--disable-accelerated-2d-canvas")
-        self.chrome_options.add_argument("--disable-accelerated-video-decode")
         self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
         self.chrome_options.add_experimental_option("useAutomationExtension", False)
         self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -119,9 +105,13 @@ class WebDriver:
 
         self.service = Service(ChromeDriverManager().install())
 
-        self.driver = webdriver.Chrome(service=self.service,
-                                       options=self.chrome_options,
-                                       seleniumwire_options=self.proxy_options)
+        self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
+        os.makedirs(self.proxy_auth_path, exist_ok=True)
+
+        proxy_zip = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
+        self.chrome_options.add_extension(os.path.join(self.proxy_auth_path, proxy_zip))
+        self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+
         self.driver.maximize_window()
 
     def check_auth(self):
@@ -246,9 +236,11 @@ class WebDriver:
         """Собирает список отчётов."""
         logger.info(f"Сбор доступных отчётов {self.market.name_company}.")
         reports = {}
-        for _ in range(3):
+        for _ in range(5):
             self.driver.get(
                 'https://seller.wildberries.ru/suppliers-mutual-settlements/reports-implementations/reports-daily')
+            time.sleep(random.randint(*TIME_SLEEP))
+            self.driver.refresh()
             time.sleep(random.randint(*TIME_SLEEP))
             try:
                 elements = WebDriverWait(self.driver, TIME_AWAITED).until(
@@ -280,7 +272,7 @@ class WebDriver:
                 for report_id in reports_ids:
                     for retry in range(1, 4):
                         if retry != 1:
-                            logger.error(f"Повторяем. Осталось {3 - retry} попыток")
+                            logger.info(f"Повторяем. Осталось {3 - retry} попыток")
                         try:
                             self.driver.get(
                                 f'https://seller.wildberries.ru/suppliers-mutual-settlements/reports-implementations/'
@@ -302,7 +294,7 @@ class WebDriver:
         """Скачивание ежедневного отчёта."""
         download_folder = os.path.expanduser("~/Downloads")
 
-        download_wait_time = 60
+        download_wait_time = 120
 
         for retry in range(6):
             try:

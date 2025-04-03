@@ -1,13 +1,10 @@
-import time
 import logging
-import schedule
 
+from log_api.log import logger
+from web_driver.wd import WebDriver
 from database.db import DbConnection
 from config import DB_ADMIN_URL, DB_ARRIS_URL
-from web_driver.wd import WebDriver
-from log_api.log import logger
 
-logging.getLogger("seleniumwire").setLevel(logging.CRITICAL)
 logging.getLogger("selenium").setLevel(logging.CRITICAL)
 
 
@@ -29,6 +26,8 @@ def main():
                 logger.info(f"Сбор отчётов компани {market.name_company} завершен")
             else:
                 logger.error(f"Сбор отчётов компани {market.name_company} прерван")
+        else:
+            logger.info(f"Сбор отчётов завершен")
     except Exception as e:
         logger.error(e)
     finally:
@@ -36,15 +35,5 @@ def main():
         db_conn_arris.session.close()
 
 
-def run_job():
-    time_run = "05:00"
-    logger.info(f"Выполнение запланировано на {time_run}")
-    schedule.every().day.at(time_run).do(main)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
 if __name__ == '__main__':
-    run_job()
+    main()

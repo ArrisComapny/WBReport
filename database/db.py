@@ -1,10 +1,9 @@
 import time
 import logging
-
-from functools import wraps
-from typing import Type
 import datetime
 
+from typing import Type
+from functools import wraps
 from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
 from sqlalchemy.exc import OperationalError
