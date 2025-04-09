@@ -10,14 +10,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_moscow_time():
     try:
-        response = requests.get(url="http://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow", verify=False)
+        response = requests.get("https://yandex.com/time/sync.json?geo=213", verify=False)
         response.raise_for_status()
         data = response.json()
-        moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])
+        moscow_time = datetime.fromtimestamp((data.get('time') / 1000),
+                                             tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
         return moscow_time
     except requests.exceptions.RequestException as e:
         logger.error(description=f"Ошибка при получении времени: {e}")
-        return datetime.now(tz=timezone(timedelta(hours=3)))
+        return datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
 
 
 class MoscowFormatter(logging.Formatter):

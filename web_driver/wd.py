@@ -108,8 +108,8 @@ class WebDriver:
         self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
         os.makedirs(self.proxy_auth_path, exist_ok=True)
 
-        proxy_zip = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
-        self.chrome_options.add_extension(os.path.join(self.proxy_auth_path, proxy_zip))
+        ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
+        self.chrome_options.add_argument(f'--load-extension={ext_path}')
         self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
 
         self.driver.maximize_window()

@@ -1,59 +1,64 @@
-import zipfile
+import os
+import json
 
 
-def create_proxy_auth_extension(proxy_auth_path: str, proxy: str, scheme='http'):
+def create_proxy_auth_extension(proxy_auth_path: str, proxy: str, scheme='http') -> str:
     """
-    Создаёт ZIP-архив расширения Chrome с прокси-авторизацией.
+    Создаёт расширения Chrome с прокси-авторизацией.
 
     Параметры:
-    - proxy_auth_path: путь, куда сохранить zip-файл
+    - proxy_auth_path: путь, куда сохранить
     - proxy: строка вида http://<login>:<password>@<host>:<port>
     - scheme: схема подключения (по умолчанию http)
 
     Возвращает:
-    - имя созданного zip-файла (например: <login>.zip)
+    - путь к расширению
     """
 
     # Разбор прокси-строки на компоненты
     proxy_host, proxy_port = proxy.split('@')[-1].split(':')
     proxy_user, proxy_pass = proxy.replace('http://', '').split('@')[0].split(':')
 
+    ext_path = os.path.join(proxy_auth_path, proxy_user)
+    os.makedirs(ext_path, exist_ok=True)
+
     # Содержимое manifest.json для расширения Chrome
-    manifest_json = """
-    {
+    manifest_json = {
+        "name": "Proxy Auth Extension",
         "version": "1.0.0",
-        "manifest_version": 2,
-        "name": "Proxy",
+        "manifest_version": 3,
         "permissions": [
             "proxy",
-            "tabs",
-            "unlimitedStorage",
             "storage",
-            "<all_urls>",
+            "tabs",
             "webRequest",
-            "webRequestBlocking"
+            "webRequestAuthProvider"
         ],
+        "host_permissions": ["<all_urls>"],
         "background": {
-            "scripts": ["background.js"]
+            "service_worker": "background.js"
         }
     }
-    """
 
     # Скрипт background.js, настраивающий прокси и авторизацию
     background_js = f"""
-    var config = {{
+    const config = {{
         mode: "fixed_servers",
         rules: {{
             singleProxy: {{
                 scheme: "{scheme}",
                 host: "{proxy_host}",
-                port: parseInt({proxy_port})
+                port: parseInt("{proxy_port}")
             }},
-            bypassList: ["localhost", "127.0.0.1"]
+            bypassList: ["localhost"]
         }}
     }};
 
-    chrome.proxy.settings.set({{value: config, scope: "regular"}}, function() {{}});
+    chrome.proxy.settings.set({{ value: config, scope: "regular" }}, function() {{}});
+
+    fetch("http://example.com")
+      .then(() => console.log("Pre-warmed"))
+      .catch(() => {{}});
 
     chrome.webRequest.onAuthRequired.addListener(
         function(details) {{
@@ -64,14 +69,15 @@ def create_proxy_auth_extension(proxy_auth_path: str, proxy: str, scheme='http')
                 }}
             }};
         }},
-        {{urls: ["<all_urls>"]}},
+        {{ urls: ["<all_urls>"] }},
         ["blocking"]
     );
     """
 
-    # Создание zip-архива с расширением
-    with zipfile.ZipFile(f'{proxy_auth_path}/{proxy_user}.zip', 'w') as zp:
-        zp.writestr("manifest.json", manifest_json)
-        zp.writestr("background.js", background_js)
+    # сохраняем manifest.json и background.js
+    with open(os.path.join(ext_path, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest_json, f, indent=4)
+    with open(os.path.join(ext_path, "background.js"), "w", encoding="utf-8") as f:
+        f.write(background_js)
 
-    return f'{proxy_user}.zip'
+    return ext_path
